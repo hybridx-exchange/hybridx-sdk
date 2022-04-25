@@ -1,1 +1,1 @@
-# hybrid-sdk
+# hybridx-sdk
