@@ -16,6 +16,7 @@ export class OrderBook {
   public readonly orderBookAddress: String
   public readonly minAmount: BigintIsh
   public readonly priceStep: BigintIsh
+  public readonly priceStepFactor: BigintIsh
   public readonly protocolFeeRate: BigintIsh
   public readonly subsidyFeeRate: BigintIsh
   public readonly curPrice: TokenAmount
@@ -23,14 +24,15 @@ export class OrderBook {
   public readonly sellOrders: Order[]
 
   public constructor(baseToken: TokenAmount, quoteToken: TokenAmount,
-                     minAmount: BigintIsh, priceStep: BigintIsh,
+                     priceStep: BigintIsh, priceStepFactor: BigintIsh,
                      protocolFeeRate: BigintIsh, subsidyFeeRate: BigintIsh,
                      curPrice: TokenAmount,
                      buyOrders: Order[], sellOrders: Order[]) {
     this.orderBookAddress = OrderBook.getAddress(baseToken.token, quoteToken.token)
     this.baseToken = baseToken
     this.quoteToken = quoteToken
-    this.minAmount = minAmount
+    this.minAmount =  parseBigintIsh('10000');
+    this.priceStepFactor = priceStepFactor
     this.priceStep = priceStep
     this.protocolFeeRate = protocolFeeRate
     this.subsidyFeeRate = subsidyFeeRate
@@ -65,8 +67,17 @@ export class OrderBook {
         parseBigintIsh(parseUnits('1', this.baseToken.token.decimals).toString()))
   }
 
+  public getPriceStep(parsedPrice: BigintIsh) : BigintIsh {
+    if (!this.priceStep) {
+      return JSBI.lessThanOrEqual(parseBigintIsh(parsedPrice), JSBI.BigInt(10000)) ? JSBI.BigInt(10000) :
+          JSBI.multiply(JSBI.divide(parseBigintIsh(parsedPrice), JSBI.BigInt(10000)),  parseBigintIsh(this.priceStepFactor))
+    }
+
+    return this.priceStep
+  }
+
   public getPriceStepDecimal() : number {
-    const priceStepAmount = formatUnits(this.priceStep.toString(), this.quoteToken.token.decimals)
+    const priceStepAmount = formatUnits(this.getPriceStep(parseBigintIsh(this.curPrice.toExact())).toString(), this.quoteToken.token.decimals)
     return priceStepAmount.substring(priceStepAmount.indexOf('.')).length
   }
 
