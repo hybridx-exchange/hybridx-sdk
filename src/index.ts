@@ -7,7 +7,7 @@ export {
   SwapType,
   TradeType,
   Rounding,
-  UTILS_ADDRESS,
+  CONFIG_ADDRESS,
   FACTORY_ADDRESS,
   INIT_CODE_HASH,
   ORDER_BOOK_FACTORY_ADDRESS,
