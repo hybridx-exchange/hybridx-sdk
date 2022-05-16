@@ -1,8 +1,6 @@
 import { TokenAmount } from "entities/fractions";
-import { OrderBook } from "entities/orderBook";
 
 export class TradeRet {
-    public readonly orderBook: OrderBook
     public readonly ammAmountIn: TokenAmount
     public readonly ammAmountOut: TokenAmount
     public readonly orderAmountIn: TokenAmount
@@ -12,7 +10,7 @@ export class TradeRet {
     public readonly amountExpect: TokenAmount
     public readonly priceTo: TokenAmount
 
-    public constructor (orderBook: OrderBook,
+    public constructor (
     ammAmountIn: TokenAmount,
     ammAmountOut: TokenAmount,
     orderAmountIn: TokenAmount,
@@ -21,7 +19,6 @@ export class TradeRet {
     amountLeft: TokenAmount,
     amountExpect: TokenAmount,
     priceTo: TokenAmount) {
-        this.orderBook = orderBook
         this.ammAmountIn = ammAmountIn
         this.ammAmountOut = ammAmountOut
         this.orderAmountIn = orderAmountIn

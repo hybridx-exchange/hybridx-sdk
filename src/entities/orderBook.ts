@@ -11,6 +11,7 @@ import { formatUnits, parseUnits } from "@ethersproject/units";
 let ORDERBOOK_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
 
 export class OrderBook {
+  public readonly exist: boolean
   public readonly baseToken: TokenAmount
   public readonly quoteToken: TokenAmount
   public readonly orderBookAddress: String
@@ -23,11 +24,12 @@ export class OrderBook {
   public readonly buyOrders: Order[]
   public readonly sellOrders: Order[]
 
-  public constructor(baseToken: TokenAmount, quoteToken: TokenAmount,
+  public constructor(exist: boolean, baseToken: TokenAmount, quoteToken: TokenAmount,
                      priceStep: BigintIsh, priceStepFactor: BigintIsh,
                      protocolFeeRate: BigintIsh, subsidyFeeRate: BigintIsh,
                      curPrice: TokenAmount,
                      buyOrders: Order[], sellOrders: Order[]) {
+    this.exist = exist
     this.orderBookAddress = OrderBook.getAddress(baseToken.token, quoteToken.token)
     this.baseToken = baseToken
     this.quoteToken = quoteToken
@@ -61,6 +63,19 @@ export class OrderBook {
     return ORDERBOOK_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
   }
 
+  public static culPrice(baseAmount?: TokenAmount, quoteAmount?: TokenAmount) : TokenAmount | undefined {
+    if (baseAmount && quoteAmount) {
+      const baseRaw = parseBigintIsh(baseAmount.raw)
+      const quoteRaw = parseBigintIsh(quoteAmount.raw)
+      const decimalRaw = parseBigintIsh(parseUnits('1', baseAmount.token.decimals).toString())
+      const priceToken = quoteAmount.token
+      const priceRaw = JSBI.divide(JSBI.multiply(quoteRaw, decimalRaw), baseRaw)
+      return new TokenAmount(priceToken, priceRaw)
+    }
+
+    return undefined
+  }
+
   public getMinQuoteAmount(parsedPrice: BigintIsh) : BigintIsh {
     //minQuoteAmount = minBaseAmount * parsePrice / baseDecimal
     return JSBI.divide(JSBI.multiply(parseBigintIsh(parsedPrice), parseBigintIsh(this.minAmount)),
@@ -68,7 +83,7 @@ export class OrderBook {
   }
 
   public getPriceStep(parsedPrice: BigintIsh) : BigintIsh {
-    if (!this.priceStep) {
+    if (!this.priceStep || JSBI.EQ(parseBigintIsh(this.priceStep), parseBigintIsh("0"))) {
       return JSBI.lessThanOrEqual(parseBigintIsh(parsedPrice), JSBI.BigInt(10000)) ? JSBI.BigInt(10000) :
           JSBI.multiply(JSBI.divide(parseBigintIsh(parsedPrice), JSBI.BigInt(10000)),  parseBigintIsh(this.priceStepFactor))
     }
@@ -77,7 +92,8 @@ export class OrderBook {
   }
 
   public getPriceStepDecimal() : number {
-    const priceStepAmount = formatUnits(this.getPriceStep(parseBigintIsh(this.curPrice.toExact())).toString(), this.quoteToken.token.decimals)
+    const priceStepAmount = formatUnits(this.getPriceStep(parseUnits(this.curPrice.raw.toString(), this.quoteToken.token.decimals).toString()).toString(),
+        this.quoteToken.token.decimals)
     return priceStepAmount.substring(priceStepAmount.indexOf('.')).length
   }
 
