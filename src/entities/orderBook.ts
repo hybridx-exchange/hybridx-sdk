@@ -2,13 +2,20 @@ import { TokenAmount } from './fractions/tokenAmount'
 import { Token } from './token'
 import { keccak256, pack } from '@ethersproject/solidity'
 import { getCreate2Address } from '@ethersproject/address'
-import { BigintIsh, ORDER_BOOK_FACTORY_ADDRESS, ORDER_BOOK_INIT_CODE_HASH, TradeType } from '../constants'
+import {
+  BigintIsh,
+  ORDER_BOOK_FACTORY_ADDRESS,
+  ORDER_BOOK_INIT_CODE_HASH,
+  ORDER_NFT_INIT_CODE_HASH,
+  TradeType
+} from '../constants'
 import { Order } from './fractions/order';
 import JSBI from "jsbi";
 import { parseBigintIsh } from "../utils";
 import { formatUnits, parseUnits } from "@ethersproject/units";
 
 let ORDERBOOK_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
+let ORDERNFT_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
 
 export class OrderBook {
   public readonly exist: boolean
@@ -53,7 +60,8 @@ export class OrderBook {
           ...ORDERBOOK_ADDRESS_CACHE?.[tokens[0].address],
           [tokens[1].address]: getCreate2Address(
               ORDER_BOOK_FACTORY_ADDRESS,
-              keccak256(['bytes'], [pack(['address', 'address'], [tokens[0].address, tokens[1].address])]),
+              keccak256(['bytes'], [pack(['address', 'address'],
+                  [tokens[0].address, tokens[1].address])]),
               ORDER_BOOK_INIT_CODE_HASH
           )
         }
@@ -61,6 +69,27 @@ export class OrderBook {
     }
 
     return ORDERBOOK_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
+  }
+
+  public static getNFTAddress(tokenA: Token, tokenB: Token): string {
+    const tokens = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA] // does safety checks
+
+    if (ORDERNFT_ADDRESS_CACHE?.[tokens[0].address]?.[tokens[1].address] === undefined) {
+      ORDERNFT_ADDRESS_CACHE = {
+        ...ORDERNFT_ADDRESS_CACHE,
+        [tokens[0].address]: {
+          ...ORDERNFT_ADDRESS_CACHE?.[tokens[0].address],
+          [tokens[1].address]: getCreate2Address(
+              ORDER_BOOK_FACTORY_ADDRESS,
+              keccak256(['bytes'], [pack(['address', 'address', 'address'],
+                  [OrderBook.getAddress(tokenA, tokenB), tokens[0].address, tokens[1].address])]),
+              ORDER_NFT_INIT_CODE_HASH
+          )
+        }
+      }
+    }
+
+    return ORDERNFT_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
   }
 
   public static culPrice(baseAmount?: TokenAmount, quoteAmount?: TokenAmount) : TokenAmount | undefined {

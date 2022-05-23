@@ -166,7 +166,7 @@ export class Swap {
         let [outputAmount, nextPair] = pair.getOutputAmount(amounts[i])
         if (route.amounts.length == route.path.length) {
           outputAmount = replaceTokenAmount(outputAmount, route.amounts[i + 1])
-          nextPair = new Pair(replaceTokenAmount(amounts[i], route.nextReserves[2 * i]), replaceTokenAmount(outputAmount, route.nextReserves[2 * i + 1]))
+          nextPair = new Pair(replaceTokenAmount(amounts[i], route.extra[6 * i]), replaceTokenAmount(outputAmount, route.extra[6 * i + 1]))
         }
         amounts[i + 1] = outputAmount
         nextPairs[i] = nextPair
@@ -179,7 +179,7 @@ export class Swap {
         let [inputAmount, nextPair] = pair.getInputAmount(amounts[i])
         if (route.amounts.length == route.path.length) {
           inputAmount = replaceTokenAmount(inputAmount, route.amounts[i - 1])
-          nextPair = new Pair(replaceTokenAmount(inputAmount, route.nextReserves[2 * (i - 1)]), replaceTokenAmount(amounts[i], route.nextReserves[2 * (i - 1) + 1]))
+          nextPair = new Pair(replaceTokenAmount(inputAmount, route.extra[6 * (i - 1)]), replaceTokenAmount(amounts[i], route.extra[6 * (i - 1) + 1]))
         }
         amounts[i - 1] = inputAmount
         nextPairs[i - 1] = nextPair
