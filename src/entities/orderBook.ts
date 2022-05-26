@@ -12,7 +12,7 @@ import {
 import { Order } from './fractions/order';
 import JSBI from "jsbi";
 import { parseBigintIsh } from "../utils";
-import { formatUnits, parseUnits } from "@ethersproject/units";
+import { parseUnits } from "@ethersproject/units";
 
 let ORDERBOOK_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
 let ORDERNFT_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
@@ -21,8 +21,9 @@ export class OrderBook {
   public readonly exist: boolean
   public readonly baseToken: TokenAmount
   public readonly quoteToken: TokenAmount
+  public readonly baseSignificantDigits: number
+  public readonly quoteSignificantDigits: number
   public readonly orderBookAddress: String
-  public readonly minAmount: BigintIsh
   public readonly priceStep: BigintIsh
   public readonly priceStepFactor: BigintIsh
   public readonly protocolFeeRate: BigintIsh
@@ -32,6 +33,7 @@ export class OrderBook {
   public readonly sellOrders: Order[]
 
   public constructor(exist: boolean, baseToken: TokenAmount, quoteToken: TokenAmount,
+                     baseSignificantDigits: number, quoteSignificantDigits: number,
                      priceStep: BigintIsh, priceStepFactor: BigintIsh,
                      protocolFeeRate: BigintIsh, subsidyFeeRate: BigintIsh,
                      curPrice: TokenAmount,
@@ -40,7 +42,10 @@ export class OrderBook {
     this.orderBookAddress = OrderBook.getAddress(baseToken.token, quoteToken.token)
     this.baseToken = baseToken
     this.quoteToken = quoteToken
-    this.minAmount =  parseBigintIsh('10000');
+    this.baseSignificantDigits = baseSignificantDigits < baseToken.token.decimals ?
+        baseSignificantDigits : baseToken.token.decimals
+    this.quoteSignificantDigits = quoteSignificantDigits < quoteToken.token.decimals ?
+        quoteSignificantDigits : quoteToken.token.decimals
     this.priceStepFactor = priceStepFactor
     this.priceStep = priceStep
     this.protocolFeeRate = protocolFeeRate
@@ -105,12 +110,6 @@ export class OrderBook {
     return undefined
   }
 
-  public getMinQuoteAmount(parsedPrice: BigintIsh) : BigintIsh {
-    //minQuoteAmount = minBaseAmount * parsePrice / baseDecimal
-    return JSBI.divide(JSBI.multiply(parseBigintIsh(parsedPrice), parseBigintIsh(this.minAmount)),
-        parseBigintIsh(parseUnits('1', this.baseToken.token.decimals).toString()))
-  }
-
   public getPriceStep(parsedPrice: BigintIsh) : BigintIsh {
     if (!this.priceStep || JSBI.EQ(parseBigintIsh(this.priceStep), parseBigintIsh("0"))) {
       return JSBI.lessThanOrEqual(parseBigintIsh(parsedPrice), JSBI.BigInt(10000)) ? JSBI.BigInt(10000) :
@@ -121,21 +120,14 @@ export class OrderBook {
   }
 
   public getPriceStepDecimal() : number {
-    const priceStepAmount = formatUnits(this.getPriceStep(parseUnits(this.curPrice.raw.toString(), this.quoteToken.token.decimals).toString()).toString(),
-        this.quoteToken.token.decimals)
-    return priceStepAmount.substring(priceStepAmount.indexOf('.')).length
+    return this.quoteSignificantDigits
   }
 
   public getMinAmountDecimal(tradeType: TradeType) : number {
     if (tradeType === TradeType.LIMIT_BUY) {
-      const minAmount = JSBI.divide(JSBI.multiply(parseBigintIsh(this.minAmount), parseBigintIsh(this.priceStep)),
-          parseBigintIsh(parseUnits('1', this.baseToken.token.decimals).toString()))
-      const minAmountAmount = formatUnits(minAmount.toString(), this.quoteToken.token.decimals)
-      return minAmountAmount.substring(minAmountAmount.indexOf('.')).length
+      return this.quoteSignificantDigits
     } else if (tradeType === TradeType.LIMIT_SELL) {
-      const minAmount = this.minAmount
-      const minAmountAmount = formatUnits(minAmount.toString(), this.baseToken.token.decimals)
-      return minAmountAmount.substring(minAmountAmount.indexOf('.')).length
+      return this.baseSignificantDigits
     }
 
     return 18
@@ -143,14 +135,9 @@ export class OrderBook {
 
   public getMinOutputAmountDecimal(tradeType: TradeType) : number {
     if (tradeType === TradeType.LIMIT_SELL) {
-      const minAmount = JSBI.divide(JSBI.multiply(parseBigintIsh(this.minAmount), parseBigintIsh(this.priceStep)),
-          parseBigintIsh(parseUnits('1', this.baseToken.token.decimals).toString()))
-      const minAmountAmount = formatUnits(minAmount.toString(), this.quoteToken.token.decimals)
-      return minAmountAmount.substring(minAmountAmount.indexOf('.')).length
+      return this.quoteSignificantDigits
     } else if (tradeType === TradeType.LIMIT_BUY) {
-      const minAmount = this.minAmount
-      const minAmountAmount = formatUnits(minAmount.toString(), this.baseToken.token.decimals)
-      return minAmountAmount.substring(minAmountAmount.indexOf('.')).length
+      return this.baseSignificantDigits
     }
 
     return 18
