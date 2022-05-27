@@ -245,6 +245,114 @@ export class Swap {
     }
   }
 
+  public static allPathExactIn(
+      pairs: Pair[],
+      currencyIn: Currency,
+      currencyOut: Currency,
+      { maxHops = 3 }: BestTradeOptions = {},
+      // used in recursion.
+      currentPairs: Pair[] = [],
+      originalCurrencyIn: Currency = currencyIn,
+      routes: Route[] = []
+  ): Route[] {
+    invariant(pairs.length > 0, 'PAIRS')
+    invariant(maxHops > 0, 'MAX_HOPS')
+    invariant(originalCurrencyIn === currencyIn || currentPairs.length > 0, 'INVALID_RECURSION')
+    const chainId: ChainId | undefined =
+        currencyIn instanceof Token
+            ? currencyIn.chainId
+            : currencyOut instanceof Token
+            ? currencyOut.chainId
+            : undefined
+    invariant(chainId !== undefined, 'CHAIN_ID')
+
+    const tokenIn = wrappedCurrency(currencyIn, chainId)
+    const tokenOut = wrappedCurrency(currencyOut, chainId)
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i]
+      // pair irrelevant
+      if (!pair.token0.equals(tokenIn) && !pair.token1.equals(tokenIn)) continue
+      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
+
+      let nextTokenOut: Token = tokenIn.equals(pair.token0) ? pair.token1 : pair.token0
+      // we have arrived at the output token, so this is the final trade of one of the paths
+      if (nextTokenOut.equals(tokenOut)) {
+        routes.push(new Route([...currentPairs, pair], [], [], originalCurrencyIn, currencyOut))
+      } else if (maxHops > 1 && pairs.length > 1) {
+        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
+
+        // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
+        Swap.allPathExactIn(
+            pairsExcludingThisPair,
+            nextTokenOut,
+            currencyOut,
+            {
+              maxHops: maxHops - 1
+            },
+            [...currentPairs, pair],
+            originalCurrencyIn,
+            routes
+        )
+      }
+    }
+
+    return routes
+  }
+
+  public static allPathExactOut(
+      pairs: Pair[],
+      currencyIn: Currency,
+      currencyOut: Currency,
+      { maxHops = 3 }: BestTradeOptions = {},
+      // used in recursion.
+      currentPairs: Pair[] = [],
+      originalCurrencyOut: Currency = currencyOut,
+      routes: Route[] = []
+  ): Route[] {
+    invariant(pairs.length > 0, 'PAIRS')
+    invariant(maxHops > 0, 'MAX_HOPS')
+    invariant(originalCurrencyOut === currencyOut || currentPairs.length > 0, 'INVALID_RECURSION')
+    const chainId: ChainId | undefined =
+        currencyOut instanceof Token
+            ? currencyOut.chainId
+            : currencyIn instanceof Token
+            ? currencyIn.chainId
+            : undefined
+    invariant(chainId !== undefined, 'CHAIN_ID')
+
+    const tokenOut = wrappedCurrency(currencyOut, chainId)
+    const tokenIn = wrappedCurrency(currencyIn, chainId)
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i]
+      // pair irrelevant
+      if (!pair.token0.equals(tokenOut) && !pair.token1.equals(tokenOut)) continue
+      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
+
+      let nextTokenIn: Token = tokenOut.equals(pair.token0) ? pair.token1 : pair.token0
+      // we have arrived at the input token, so this is the first trade of one of the paths
+      if (nextTokenIn.equals(tokenIn)) {
+        routes.push(new Route([pair, ...currentPairs], [], [], currencyIn, originalCurrencyOut))
+      } else if (maxHops > 1 && pairs.length > 1) {
+        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
+
+        // otherwise, consider all the other paths that arrive at this token as long as we have not exceeded maxHops
+        Swap.allPathExactOut(
+            pairsExcludingThisPair,
+            currencyIn,
+            nextTokenIn,
+            {
+              maxHops: maxHops - 1
+            },
+            [pair, ...currentPairs],
+            originalCurrencyOut,
+            routes
+        )
+      }
+    }
+
+    return routes
+  }
+
   /**
    * Given a list of pairs, and a fixed amount in, returns the top `maxNumResults` trades that go from an input token
    * amount to an output token, making at most `maxHops` hops.
