@@ -1,7 +1,6 @@
 import invariant from 'tiny-invariant'
 
 import { BigintIsh, ChainId, ONE, SwapType, ZERO } from '../constants'
-import { sortedInsert } from '../utils'
 import { Currency, ETHER } from './currency'
 import { CurrencyAmount } from './fractions/currencyAmount'
 import { Fraction } from './fractions/fraction'
@@ -159,16 +158,15 @@ export class Swap {
     const amounts: TokenAmount[] = new Array(route.path.length)
     const nextPairs: Pair[] = new Array(route.pairs.length)
     const chainId = route.chainId
+    invariant(route.amounts.length === route.path.length, 'PATH')
     if (tradeType === SwapType.EXACT_INPUT) {
       invariant(currencyEquals(amount.currency, route.input), 'INPUT')
       amounts[0] = wrappedAmount(amount, route.chainId)
       for (let i = 0; i < route.path.length - 1; i++) {
         const pair = route.pairs[i]
-        let [outputAmount, nextPair] = pair.getOutputAmount(amounts[i])
-        if (route.amounts.length == route.path.length) {
-          outputAmount = replaceTokenAmount(outputAmount, route.amounts[i + 1])
-          nextPair = new Pair(replaceTokenAmount(amounts[i], route.nextReserves[2 * i]), replaceTokenAmount(outputAmount, route.nextReserves[2 * i + 1]))
-        }
+        let outputToken = amounts[i].token.equals(pair.token0) ? pair.token1 : pair.token0
+        let outputAmount = new TokenAmount(outputToken, route.amounts[i + 1])
+        let nextPair = new Pair(replaceTokenAmount(amounts[i], route.extra[6 * i]), replaceTokenAmount(outputAmount, route.extra[6 * i + 1]))
         amounts[i + 1] = outputAmount
         nextPairs[i] = nextPair
       }
@@ -177,11 +175,9 @@ export class Swap {
       amounts[amounts.length - 1] = wrappedAmount(amount, route.chainId)
       for (let i = route.path.length - 1; i > 0; i--) {
         const pair = route.pairs[i - 1]
-        let [inputAmount, nextPair] = pair.getInputAmount(amounts[i])
-        if (route.amounts.length == route.path.length) {
-          inputAmount = replaceTokenAmount(inputAmount, route.amounts[i - 1])
-          nextPair = new Pair(replaceTokenAmount(inputAmount, route.nextReserves[2 * (i - 1)]), replaceTokenAmount(amounts[i], route.nextReserves[2 * (i - 1) + 1]))
-        }
+        let inputToken = amounts[i].token.equals(pair.token0) ? pair.token1 : pair.token0
+        let inputAmount = new TokenAmount(inputToken, route.amounts[i - 1])
+        let nextPair = new Pair(replaceTokenAmount(inputAmount, route.extra[6 * (i - 1)]), replaceTokenAmount(amounts[i], route.extra[6 * (i - 1) + 1]))
         amounts[i - 1] = inputAmount
         nextPairs[i - 1] = nextPair
       }
@@ -246,178 +242,111 @@ export class Swap {
     }
   }
 
-  /**
-   * Given a list of pairs, and a fixed amount in, returns the top `maxNumResults` trades that go from an input token
-   * amount to an output token, making at most `maxHops` hops.
-   * Note this does not consider aggregation, as routes are linear. It's possible a better route exists by splitting
-   * the amount in among multiple routes.
-   * @param pairs the pairs to consider in finding the best trade
-   * @param currencyAmountIn exact amount of input currency to spend
-   * @param currencyOut the desired currency out
-   * @param maxNumResults maximum number of results to return
-   * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
-   * @param currentPairs used in recursion; the current list of pairs
-   * @param originalAmountIn used in recursion; the original value of the currencyAmountIn parameter
-   * @param bestTrades used in recursion; the current list of best trades
-   */
-  public static bestTradeExactIn(
-    pairs: Pair[],
-    currencyAmountIn: CurrencyAmount,
-    currencyOut: Currency,
-    { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
-    // used in recursion.
-    currentPairs: Pair[] = [],
-    originalAmountIn: CurrencyAmount = currencyAmountIn,
-    bestTrades: Swap[] = []
-  ): Swap[] {
+  public static allPathExactIn(
+      pairs: Pair[],
+      currencyIn: Currency,
+      currencyOut: Currency,
+      { maxHops = 3 }: BestTradeOptions = {},
+      // used in recursion.
+      currentPairs: Pair[] = [],
+      originalCurrencyIn: Currency = currencyIn,
+      routes: Route[] = []
+  ): Route[] {
     invariant(pairs.length > 0, 'PAIRS')
     invariant(maxHops > 0, 'MAX_HOPS')
-    invariant(originalAmountIn === currencyAmountIn || currentPairs.length > 0, 'INVALID_RECURSION')
+    invariant(originalCurrencyIn === currencyIn || currentPairs.length > 0, 'INVALID_RECURSION')
     const chainId: ChainId | undefined =
-      currencyAmountIn instanceof TokenAmount
-        ? currencyAmountIn.token.chainId
-        : currencyOut instanceof Token
-        ? currencyOut.chainId
-        : undefined
+        currencyIn instanceof Token
+            ? currencyIn.chainId
+            : currencyOut instanceof Token
+            ? currencyOut.chainId
+            : undefined
     invariant(chainId !== undefined, 'CHAIN_ID')
 
-    const amountIn = wrappedAmount(currencyAmountIn, chainId)
+    const tokenIn = wrappedCurrency(currencyIn, chainId)
     const tokenOut = wrappedCurrency(currencyOut, chainId)
     for (let i = 0; i < pairs.length; i++) {
       const pair = pairs[i]
       // pair irrelevant
-      if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
+      if (!pair.token0.equals(tokenIn) && !pair.token1.equals(tokenIn)) continue
       if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
 
-      let amountOut: TokenAmount
-      try {
-        ;[amountOut] = pair.getOutputAmount(amountIn)
-      } catch (error) {
-        // input too low
-        if (error.isInsufficientInputAmountError) {
-          continue
-        }
-        throw error
-      }
+      let nextTokenOut: Token = tokenIn.equals(pair.token0) ? pair.token1 : pair.token0
       // we have arrived at the output token, so this is the final trade of one of the paths
-      if (amountOut.token.equals(tokenOut)) {
-        sortedInsert(
-          bestTrades,
-          new Swap(
-            new Route([...currentPairs, pair], [], [], originalAmountIn.currency, currencyOut),
-            originalAmountIn,
-            SwapType.EXACT_INPUT
-          ),
-          maxNumResults,
-          swapComparator
-        )
+      if (nextTokenOut.equals(tokenOut)) {
+        routes.push(new Route([...currentPairs, pair], [], [], originalCurrencyIn, currencyOut))
       } else if (maxHops > 1 && pairs.length > 1) {
         const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
 
         // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
-        Swap.bestTradeExactIn(
-          pairsExcludingThisPair,
-          amountOut,
-          currencyOut,
-          {
-            maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [...currentPairs, pair],
-          originalAmountIn,
-          bestTrades
+        Swap.allPathExactIn(
+            pairsExcludingThisPair,
+            nextTokenOut,
+            currencyOut,
+            {
+              maxHops: maxHops - 1
+            },
+            [...currentPairs, pair],
+            originalCurrencyIn,
+            routes
         )
       }
     }
 
-    return bestTrades
+    return routes
   }
 
-  /**
-   * similar to the above method but instead targets a fixed output amount
-   * given a list of pairs, and a fixed amount out, returns the top `maxNumResults` trades that go from an input token
-   * to an output token amount, making at most `maxHops` hops
-   * note this does not consider aggregation, as routes are linear. it's possible a better route exists by splitting
-   * the amount in among multiple routes.
-   * @param pairs the pairs to consider in finding the best trade
-   * @param currencyIn the currency to spend
-   * @param currencyAmountOut the exact amount of currency out
-   * @param maxNumResults maximum number of results to return
-   * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
-   * @param currentPairs used in recursion; the current list of pairs
-   * @param originalAmountOut used in recursion; the original value of the currencyAmountOut parameter
-   * @param bestTrades used in recursion; the current list of best trades
-   */
-  public static bestTradeExactOut(
-    pairs: Pair[],
-    currencyIn: Currency,
-    currencyAmountOut: CurrencyAmount,
-    { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
-    // used in recursion.
-    currentPairs: Pair[] = [],
-    originalAmountOut: CurrencyAmount = currencyAmountOut,
-    bestTrades: Swap[] = []
-  ): Swap[] {
+  public static allPathExactOut(
+      pairs: Pair[],
+      currencyIn: Currency,
+      currencyOut: Currency,
+      { maxHops = 3 }: BestTradeOptions = {},
+      // used in recursion.
+      currentPairs: Pair[] = [],
+      originalCurrencyOut: Currency = currencyOut,
+      routes: Route[] = []
+  ): Route[] {
     invariant(pairs.length > 0, 'PAIRS')
     invariant(maxHops > 0, 'MAX_HOPS')
-    invariant(originalAmountOut === currencyAmountOut || currentPairs.length > 0, 'INVALID_RECURSION')
+    invariant(originalCurrencyOut === currencyOut || currentPairs.length > 0, 'INVALID_RECURSION')
     const chainId: ChainId | undefined =
-      currencyAmountOut instanceof TokenAmount
-        ? currencyAmountOut.token.chainId
-        : currencyIn instanceof Token
-        ? currencyIn.chainId
-        : undefined
+        currencyOut instanceof Token
+            ? currencyOut.chainId
+            : currencyIn instanceof Token
+            ? currencyIn.chainId
+            : undefined
     invariant(chainId !== undefined, 'CHAIN_ID')
 
-    const amountOut = wrappedAmount(currencyAmountOut, chainId)
+    const tokenOut = wrappedCurrency(currencyOut, chainId)
     const tokenIn = wrappedCurrency(currencyIn, chainId)
     for (let i = 0; i < pairs.length; i++) {
       const pair = pairs[i]
       // pair irrelevant
-      if (!pair.token0.equals(amountOut.token) && !pair.token1.equals(amountOut.token)) continue
+      if (!pair.token0.equals(tokenOut) && !pair.token1.equals(tokenOut)) continue
       if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
 
-      let amountIn: TokenAmount
-      try {
-        ;[amountIn] = pair.getInputAmount(amountOut)
-      } catch (error) {
-        // not enough liquidity in this pair
-        if (error.isInsufficientReservesError) {
-          continue
-        }
-        throw error
-      }
+      let nextTokenIn: Token = tokenOut.equals(pair.token0) ? pair.token1 : pair.token0
       // we have arrived at the input token, so this is the first trade of one of the paths
-      if (amountIn.token.equals(tokenIn)) {
-        sortedInsert(
-          bestTrades,
-          new Swap(
-            new Route([pair, ...currentPairs], [], [], currencyIn, originalAmountOut.currency),
-            originalAmountOut,
-            SwapType.EXACT_OUTPUT
-          ),
-          maxNumResults,
-          swapComparator
-        )
+      if (nextTokenIn.equals(tokenIn)) {
+        routes.push(new Route([pair, ...currentPairs], [], [], currencyIn, originalCurrencyOut))
       } else if (maxHops > 1 && pairs.length > 1) {
         const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
 
         // otherwise, consider all the other paths that arrive at this token as long as we have not exceeded maxHops
-        Swap.bestTradeExactOut(
-          pairsExcludingThisPair,
-          currencyIn,
-          amountIn,
-          {
-            maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [pair, ...currentPairs],
-          originalAmountOut,
-          bestTrades
+        Swap.allPathExactOut(
+            pairsExcludingThisPair,
+            currencyIn,
+            nextTokenIn,
+            {
+              maxHops: maxHops - 1
+            },
+            [pair, ...currentPairs],
+            originalCurrencyOut,
+            routes
         )
       }
     }
 
-    return bestTrades
+    return routes
   }
 }
