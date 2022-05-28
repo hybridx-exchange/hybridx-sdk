@@ -41,16 +41,16 @@ export class OrderBook {
 
   public static getAddress(tokenA: Token, tokenB: Token): string {
     const tokens = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA] // does safety checks
-
+    const chainId = tokenA.chainId
     if (ORDERBOOK_ADDRESS_CACHE?.[tokens[0].address]?.[tokens[1].address] === undefined) {
       ORDERBOOK_ADDRESS_CACHE = {
         ...ORDERBOOK_ADDRESS_CACHE,
         [tokens[0].address]: {
           ...ORDERBOOK_ADDRESS_CACHE?.[tokens[0].address],
           [tokens[1].address]: getCreate2Address(
-              ORDER_BOOK_FACTORY_ADDRESS,
+              ORDER_BOOK_FACTORY_ADDRESS[chainId],
               keccak256(['bytes'], [pack(['address', 'address'], [tokens[0].address, tokens[1].address])]),
-              ORDER_BOOK_INIT_CODE_HASH
+              ORDER_BOOK_INIT_CODE_HASH[chainId]
           )
         }
       }

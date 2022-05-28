@@ -21,19 +21,20 @@ export class Route {
       pairs.every(pair => pair.chainId === pairs[0].chainId),
       'CHAIN_IDS'
     )
+    const chainId = pairs[0].chainId
     invariant(
       (input instanceof Token && pairs[0].involvesToken(input)) ||
-        (input === ETHER && pairs[0].involvesToken(WETH[pairs[0].chainId])),
+        (input === ETHER[chainId] && pairs[0].involvesToken(WETH[chainId])),
       'INPUT'
     )
     invariant(
       typeof output === 'undefined' ||
         (output instanceof Token && pairs[pairs.length - 1].involvesToken(output)) ||
-        (output === ETHER && pairs[pairs.length - 1].involvesToken(WETH[pairs[0].chainId])),
+        (output === ETHER[chainId] && pairs[pairs.length - 1].involvesToken(WETH[chainId])),
       'OUTPUT'
     )
 
-    const path: Token[] = [input instanceof Token ? input : WETH[pairs[0].chainId]]
+    const path: Token[] = [input instanceof Token ? input : WETH[chainId]]
     for (const [i, pair] of pairs.entries()) {
       const currentInput = path[i]
       invariant(currentInput.equals(pair.token0) || currentInput.equals(pair.token1), 'PATH')

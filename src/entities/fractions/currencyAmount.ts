@@ -1,3 +1,4 @@
+import { ChainId } from "../../constants";
 import { currencyEquals } from '../token'
 import { Currency, ETHER } from '../currency'
 import invariant from 'tiny-invariant'
@@ -19,8 +20,8 @@ export class CurrencyAmount extends Fraction {
    * Helper that calls the constructor with the ETHER currency
    * @param amount ether amount in wei
    */
-  public static ether(amount: BigintIsh): CurrencyAmount {
-    return new CurrencyAmount(ETHER, amount)
+  public static ether(amount: BigintIsh, chainId: ChainId): CurrencyAmount {
+    return new CurrencyAmount(ETHER[chainId], amount)
   }
 
   // amount _must_ be raw, i.e. in the native representation

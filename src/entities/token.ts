@@ -1,7 +1,7 @@
 import invariant from 'tiny-invariant'
-import { ChainId } from '../constants'
-import { validateAndParseAddress } from '../utils'
-import { Currency } from './currency'
+import {ChainId} from '../constants'
+import {validateAndParseAddress} from '../utils'
+import {Currency} from './currency'
 
 /**
  * Represents an ERC20 token with a unique address and some metadata.
@@ -57,18 +57,32 @@ export function currencyEquals(currencyA: Currency, currencyB: Currency): boolea
 }
 
 export const WETH = {
-  [42262]: new Token(
-      42262,
+  [ChainId.MAINNET]: new Token(
+      ChainId.MAINNET,
     '0xb9ab821f7323dB4357Bf71eA66670C01761c3d73',
     18,
     'WROSE',
     'Wrapped ROSE'
   ),
-  [42261]: new Token(
-      42261,
+  [ChainId.TESTNET]: new Token(
+      ChainId.TESTNET,
     '0xb9ab821f7323dB4357Bf71eA66670C01761c3d73',
     18,
     'WROSE',
     'Wrapped ROSE'
+  ),
+  [ChainId.OPTIMISM_TESTNET]: new Token(
+      ChainId.OPTIMISM_TESTNET,
+      '0x4200000000000000000000000000000000000006',
+      18,
+      'WETH',
+      'Wrapped ETH'
+  ),
+  [ChainId.OPTIMISM_MAINNET]: new Token(
+      ChainId.OPTIMISM_MAINNET,
+      '0x4200000000000000000000000000000000000006',
+      18,
+      'WETH',
+      'Wrapped ETH'
   )
 }
