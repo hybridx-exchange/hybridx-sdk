@@ -9,7 +9,7 @@ import toFormat from 'toformat'
 import { BigintIsh, Rounding, TEN, SolidityType } from '../../constants'
 import { parseBigintIsh, validateSolidityTypeInstance } from '../../utils'
 import { Fraction } from './fraction'
-import {parseUnits} from "@ethersproject/units";
+import { parseUnits } from "@ethersproject/units";
 
 const Big = toFormat(_Big)
 
