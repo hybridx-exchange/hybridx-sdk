@@ -62,12 +62,13 @@ export abstract class Trader {
     const type = trade.tradeType
     const baseToken = trade.orderBook.baseToken.token
     const quoteToken = trade.orderBook.quoteToken.token
-    const etherIn = (type === TradeType.LIMIT_BUY && trade.quoteToken === ETHER) || (type === TradeType.LIMIT_SELL && trade.baseToken === ETHER)
+    const chainId = baseToken.chainId
+    const etherIn = (type === TradeType.LIMIT_BUY && trade.quoteToken === ETHER[chainId]) || (type === TradeType.LIMIT_SELL && trade.baseToken === ETHER[chainId])
     // the router does not support both ether in and out
-    invariant(((trade.baseToken === ETHER && baseToken === WETH[baseToken.chainId]) || (trade.baseToken === baseToken)), 'BASE_TOKEN_NOT_MATCH')
-    invariant(((trade.quoteToken === ETHER && quoteToken === WETH[quoteToken.chainId]) || (trade.quoteToken === quoteToken)), 'QUOTE_TOKEN_NOT_MATCH')
-    invariant(!((trade.quoteToken === ETHER && trade.baseToken === WETH[quoteToken.chainId]) ||
-        (trade.baseToken === ETHER && trade.quoteToken === WETH[quoteToken.chainId]) ||
+    invariant(((trade.baseToken === ETHER[chainId] && baseToken === WETH[chainId]) || (trade.baseToken === baseToken)), 'BASE_TOKEN_NOT_MATCH')
+    invariant(((trade.quoteToken === ETHER[chainId] && quoteToken === WETH[chainId]) || (trade.quoteToken === quoteToken)), 'QUOTE_TOKEN_NOT_MATCH')
+    invariant(!((trade.quoteToken === ETHER[chainId] && trade.baseToken === WETH[chainId]) ||
+        (trade.baseToken === ETHER[chainId] && trade.quoteToken === WETH[chainId]) ||
         (trade.quoteToken === trade.baseToken)), 'TOKEN_NOT_MATCH')
     //invariant(JSBI.equal(JSBI.remainder(trade.price.raw, parseBigintIsh(trade.orderBook.priceStep)), ZERO),
       // 'PRICE_MISMATCH_STEP')
