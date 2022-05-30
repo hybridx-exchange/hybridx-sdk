@@ -14,8 +14,8 @@ import JSBI from "jsbi";
 import { parseBigintIsh } from "../utils";
 import { parseUnits } from "@ethersproject/units";
 
-let ORDERBOOK_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
-let ORDERNFT_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
+let ORDERBOOK_ADDRESS_CACHE: { [chainId: number]: {[token0Address: string]: { [token1Address: string]: string }} } = {}
+let ORDERNFT_ADDRESS_CACHE: { [chainId: number]: {[token0Address: string]: { [token1Address: string]: string }} } = {}
 
 export class OrderBook {
   public readonly exist: boolean
@@ -58,43 +58,49 @@ export class OrderBook {
   public static getAddress(tokenA: Token, tokenB: Token): string {
     const tokens = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA] // does safety checks
     const chainId = tokenA.chainId
-    if (ORDERBOOK_ADDRESS_CACHE?.[tokens[0].address]?.[tokens[1].address] === undefined) {
+    if (ORDERBOOK_ADDRESS_CACHE?.[chainId]?.[tokens[0].address]?.[tokens[1].address] === undefined) {
       ORDERBOOK_ADDRESS_CACHE = {
         ...ORDERBOOK_ADDRESS_CACHE,
-        [tokens[0].address]: {
-          ...ORDERBOOK_ADDRESS_CACHE?.[tokens[0].address],
-          [tokens[1].address]: getCreate2Address(
+        [chainId]: {
+          ...ORDERBOOK_ADDRESS_CACHE?.[chainId],
+          [tokens[0].address]: {
+            ...ORDERBOOK_ADDRESS_CACHE?.[chainId]?.[tokens[0].address],
+            [tokens[1].address]: getCreate2Address(
               ORDER_BOOK_FACTORY_ADDRESS[chainId],
               keccak256(['bytes'], [pack(['address', 'address'],
                   [tokens[0].address, tokens[1].address])]),
               ORDER_BOOK_INIT_CODE_HASH[chainId]
-          )
+            )
+          }
         }
       }
     }
 
-    return ORDERBOOK_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
+    return ORDERBOOK_ADDRESS_CACHE[chainId][tokens[0].address][tokens[1].address]
   }
 
   public static getNFTAddress(tokenA: Token, tokenB: Token): string {
     const tokens = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA] // does safety checks
     const chainId = tokenA.chainId
-    if (ORDERNFT_ADDRESS_CACHE?.[tokens[0].address]?.[tokens[1].address] === undefined) {
+    if (ORDERNFT_ADDRESS_CACHE?.[chainId]?.[tokens[0].address]?.[tokens[1].address] === undefined) {
       ORDERNFT_ADDRESS_CACHE = {
         ...ORDERNFT_ADDRESS_CACHE,
-        [tokens[0].address]: {
-          ...ORDERNFT_ADDRESS_CACHE?.[tokens[0].address],
-          [tokens[1].address]: getCreate2Address(
+        [chainId]: {
+          ...ORDERNFT_ADDRESS_CACHE?.[chainId],
+          [tokens[0].address]: {
+            ...ORDERNFT_ADDRESS_CACHE?.[chainId]?.[tokens[0].address],
+            [tokens[1].address]: getCreate2Address(
               ORDER_BOOK_FACTORY_ADDRESS[chainId],
               keccak256(['bytes'], [pack(['address', 'address', 'address'],
                   [OrderBook.getAddress(tokenA, tokenB), tokens[0].address, tokens[1].address])]),
               ORDER_NFT_INIT_CODE_HASH[chainId]
-          )
+            )
+          }
         }
       }
     }
 
-    return ORDERNFT_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
+    return ORDERNFT_ADDRESS_CACHE[chainId][tokens[0].address][tokens[1].address]
   }
 
   public static culPrice(baseAmount?: TokenAmount, quoteAmount?: TokenAmount) : TokenAmount | undefined {
