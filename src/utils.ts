@@ -25,6 +25,7 @@ export function validateAndParseAddress(address: string): string {
         return checksummedAddress
     } catch (error) {
         invariant(false, `${address} is not a valid address.`)
+        return ''
     }
 }
 
@@ -89,5 +90,5 @@ export function sortedInsert<T>(items: T[], add: T, maxSize: number, comparator:
 }
 
 export function validChainId(chainId: number | undefined) : boolean {
-    return chainId === ChainId.MAINNET.valueOf() || chainId === ChainId.TESTNET.valueOf()
+    return chainId === ChainId.OPTIMISM_TESTNET.valueOf() || chainId === ChainId.TESTNET.valueOf()
 }
